@@ -1,0 +1,11 @@
+{
+  "name": "OmniCut Studio AI - Real-Time Multimodal Video Director",
+  "description": "Aplikasi pengeditan video profesional berbasis AI real-time dengan kendali perintah suara, teks, dan referensi gambar.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
