@@ -9,7 +9,7 @@ import {
   Sliders,
   Share2,
 } from 'lucide-react';
-import { AspectRatio, VideoFilterSettings } from '../types/editor';
+import { AspectRatio, ExplainerProject, VideoFilterSettings } from '../types/editor';
 
 interface ExportModalProps {
   isOpen: boolean;
@@ -19,6 +19,9 @@ interface ExportModalProps {
   aspectRatio: AspectRatio;
   duration: number;
   filterSettings: VideoFilterSettings;
+  explainerProject?: ExplainerProject | null;
+  onSeek?: (time: number) => void;
+  onSetPlaying?: (playing: boolean) => void;
 }
 
 export const ExportModal: React.FC<ExportModalProps> = ({
@@ -29,12 +32,16 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   aspectRatio,
   duration,
   filterSettings,
+  explainerProject,
+  onSeek,
+  onSetPlaying,
 }) => {
   const [resolution, setResolution] = useState<'1080p' | '720p'>('1080p');
   const [fps, setFps] = useState<30 | 60>(60);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -43,23 +50,49 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     const video = videoRef.current;
 
     if (!canvas) {
-      alert('Canvas belum siap untuk dirender.');
+      setErrorMessage('Canvas belum siap untuk dirender.');
       return;
     }
 
+    setErrorMessage(null);
     setIsExporting(true);
     setExportProgress(0);
     setDownloadUrl(null);
 
+    let exportAudioCtx: AudioContext | null = null;
+    let exportAudioSource: AudioBufferSourceNode | null = null;
+
     try {
-      // Seek video to 0
-      if (video) {
+      // Reset timeline to 0
+      if (onSeek) onSeek(0);
+      if (video && !(explainerProject?.active)) {
         video.currentTime = 0;
         await video.play().catch(() => {});
       }
 
-      // Capture stream from canvas
-      const stream = canvas.captureStream(fps);
+      // Capture video stream from canvas
+      const canvasStream = canvas.captureStream(fps);
+      const tracks: MediaStreamTrack[] = [...canvasStream.getVideoTracks()];
+
+      // If AI Explainer voiceover WAV exists, decode and mux into export stream
+      if (explainerProject?.active && explainerProject.audioUrl) {
+        try {
+          const resp = await fetch(explainerProject.audioUrl);
+          const arrayBuf = await resp.arrayBuffer();
+          exportAudioCtx = new AudioContext();
+          const decoded = await exportAudioCtx.decodeAudioData(arrayBuf);
+          const dest = exportAudioCtx.createMediaStreamDestination();
+          exportAudioSource = exportAudioCtx.createBufferSource();
+          exportAudioSource.buffer = decoded;
+          exportAudioSource.connect(dest);
+          const audioTracks = dest.stream.getAudioTracks();
+          audioTracks.forEach((t) => tracks.push(t));
+        } catch (audioErr) {
+          console.warn('Could not mux explainer audio into export:', audioErr);
+        }
+      }
+
+      const combinedStream = new MediaStream(tracks);
 
       // Setup MediaRecorder
       const mimeTypes = [
@@ -76,7 +109,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         }
       }
 
-      const recorder = new MediaRecorder(stream, {
+      const recorder = new MediaRecorder(combinedStream, {
         mimeType: selectedMime,
         videoBitsPerSecond: resolution === '1080p' ? 8000000 : 4000000,
       });
@@ -89,6 +122,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       };
 
       recorder.onstop = () => {
+        if (exportAudioSource) {
+          try {
+            exportAudioSource.stop();
+          } catch {
+            // ignore
+          }
+        }
+        if (exportAudioCtx) {
+          exportAudioCtx.close().catch(() => {});
+        }
+        if (onSetPlaying) onSetPlaying(false);
         const blob = new Blob(chunks, { type: selectedMime });
         const url = URL.createObjectURL(blob);
         setDownloadUrl(url);
@@ -97,24 +141,33 @@ export const ExportModal: React.FC<ExportModalProps> = ({
       };
 
       recorder.start();
+      if (exportAudioSource) {
+        exportAudioSource.start(0);
+      }
+      if (onSetPlaying) onSetPlaying(true);
 
-      // Progress tracker based on video duration
+      // Progress tracker based on project duration
       const totalSec = Math.max(3, duration || 15);
+      const startMs = performance.now();
       const interval = setInterval(() => {
-        if (!video) return;
-        const progress = Math.min(100, Math.round((video.currentTime / totalSec) * 100));
+        const elapsedSec = (performance.now() - startMs) / 1000;
+        const progress = Math.min(100, Math.round((elapsedSec / totalSec) * 100));
         setExportProgress(progress);
 
-        if (video.currentTime >= totalSec - 0.2 || video.ended) {
+        if (elapsedSec >= totalSec) {
           clearInterval(interval);
-          recorder.stop();
+          if (recorder.state !== 'inactive') {
+            recorder.stop();
+          }
           if (video) video.pause();
         }
-      }, 200);
+      }, 150);
     } catch (err) {
       console.error('Export failed:', err);
+      if (exportAudioCtx) exportAudioCtx.close().catch(() => {});
+      if (onSetPlaying) onSetPlaying(false);
       setIsExporting(false);
-      alert('Gagal mengekspor video melalui MediaRecorder browser.');
+      setErrorMessage('Gagal mengekspor video melalui MediaRecorder browser.');
     }
   };
 
@@ -141,6 +194,19 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Error message banner */}
+        {errorMessage && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+            <span>{errorMessage}</span>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-rose-400 hover:text-rose-200 ml-2"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Export Configuration */}
         {!downloadUrl && !isExporting && (

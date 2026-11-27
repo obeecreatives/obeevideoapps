@@ -103,3 +103,87 @@ export interface SampleProject {
   defaultBroll: BrollItem[];
   defaultFilter: VideoFilterSettings;
 }
+
+export type PreviewQuality = 'draft' | 'normal' | 'high';
+
+export type TemplateLayoutType =
+  | 'solo'
+  | 'split-vertical'
+  | 'split-horizontal'
+  | 'pip'
+  | 'reaction-frame';
+
+export type PipPosition =
+  | 'top-right'
+  | 'top-left'
+  | 'bottom-right'
+  | 'bottom-left'
+  | 'center';
+
+export interface LayoutSettings {
+  type: TemplateLayoutType;
+  swapSlots: boolean;
+  splitRatio: number; // 0.25 to 0.75, default 0.5
+  pipScale: number; // 0.20 to 0.60, default 0.35 (35% scale)
+  pipPosition: PipPosition;
+  slot1ClipId?: string;
+  slot2ClipId?: string;
+  showDivider: boolean;
+  dividerColor: string;
+}
+
+export type ExplainerTheme =
+  | 'smartboard-dark'
+  | 'corporate-clean'
+  | 'editorial-warm'
+  | 'cyber-neon';
+
+export type ExplainerSlideLayout =
+  | 'hero-hook'
+  | 'bullet-steps'
+  | 'comparison-flow'
+  | 'big-stat'
+  | 'cta-finale';
+
+export type ExplainerVoiceName = 'Kore' | 'Zephyr' | 'Puck' | 'Charon' | 'Fenrir';
+
+export interface ExplainerSlideItem {
+  icon: string;
+  title: string;
+  desc: string;
+  color?: string;
+}
+
+export interface ExplainerSlide {
+  id: string;
+  badge: string;
+  title: string;
+  subtitle?: string;
+  layout: ExplainerSlideLayout;
+  narration: string;
+  startSec: number;
+  endSec: number;
+  accentColor: string;
+  items: ExplainerSlideItem[];
+  leftColumnTitle?: string;
+  rightColumnTitle?: string;
+  rightItems?: ExplainerSlideItem[];
+  highlightStat?: string;
+  highlightLabel?: string;
+}
+
+export interface ExplainerProject {
+  id: string;
+  title: string;
+  subtitle: string;
+  videoType: 'tutorial' | 'iklan' | 'editorial';
+  theme: ExplainerTheme;
+  voiceName: ExplainerVoiceName;
+  fullNarration: string;
+  audioUrl?: string;
+  slides: ExplainerSlide[];
+  totalDuration: number;
+  active: boolean;
+}
+
+

@@ -77,9 +77,12 @@ export const MultimodalCommandBar: React.FC<MultimodalCommandBarProps> = ({
     }
   }, []);
 
+  const [speechWarning, setSpeechWarning] = useState<string | null>(null);
+
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      alert('Browser Anda belum mendukung Web Speech API secara native. Silakan gunakan input teks.');
+      setSpeechWarning('Browser belum mendukung Web Speech API secara native. Silakan ketik perintah teks.');
+      setTimeout(() => setSpeechWarning(null), 5000);
       return;
     }
 
@@ -132,6 +135,19 @@ export const MultimodalCommandBar: React.FC<MultimodalCommandBarProps> = ({
 
   return (
     <div className="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl p-3 shadow-xl backdrop-blur-lg flex flex-col gap-2.5">
+      {/* Speech warning notice if speech API unavailable */}
+      {speechWarning && (
+        <div className="flex items-center justify-between px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-300 text-xs">
+          <span>⚠️ {speechWarning}</span>
+          <button
+            onClick={() => setSpeechWarning(null)}
+            className="text-amber-400 hover:text-amber-200 ml-2"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Top Banner: Active Image Reference or Interim Speech */}
       {(selectedImage || interimTranscript) && (
         <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-950/80 rounded-lg border border-zinc-800 text-xs">
@@ -257,26 +273,26 @@ export const MultimodalCommandBar: React.FC<MultimodalCommandBarProps> = ({
         </div>
 
         {/* Natural Language Prompt Input */}
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <input
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={
               isListening
-                ? 'Sedang mendengarkan ucapanmu...'
-                : 'Instruksikan AI Director... (cth: "Potong jeda, beri warna teal & orange, pasang caption Alex Hormozi")'
+                ? 'Mendengarkan suara...'
+                : 'Instruksi AI... (cth: "Warna sinematik, pasang caption")'
             }
             disabled={isProcessing}
-            className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-zinc-100 placeholder-zinc-500 px-4 py-2.5 rounded-xl text-sm font-sans outline-none transition-all"
+            className="w-full bg-zinc-950 border border-zinc-800 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 text-zinc-100 placeholder-zinc-500 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-sans outline-none transition-all truncate"
           />
           {inputText && (
             <button
               type="button"
               onClick={() => setInputText('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
             >
-              <X className="w-4 h-4" />
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
@@ -285,7 +301,7 @@ export const MultimodalCommandBar: React.FC<MultimodalCommandBarProps> = ({
         <button
           type="submit"
           disabled={isProcessing || (!inputText.trim() && !selectedImage)}
-          className={`px-4 py-2.5 rounded-xl flex items-center gap-2 font-semibold text-sm transition-all cursor-pointer ${
+          className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl flex items-center gap-1.5 sm:gap-2 font-semibold text-xs sm:text-sm transition-all cursor-pointer shrink-0 ${
             isProcessing
               ? 'bg-cyan-900/50 text-cyan-300 cursor-wait'
               : !inputText.trim() && !selectedImage
@@ -295,12 +311,12 @@ export const MultimodalCommandBar: React.FC<MultimodalCommandBarProps> = ({
         >
           {isProcessing ? (
             <>
-              <Loader2 className="w-4 h-4 animate-spin text-cyan-400" />
-              <span>Memproses...</span>
+              <Loader2 className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+              <span className="hidden xs:inline">Memproses...</span>
             </>
           ) : (
             <>
-              <Wand2 className="w-4 h-4" />
+              <Wand2 className="w-4 h-4 shrink-0" />
               <span>AI Edit</span>
             </>
           )}

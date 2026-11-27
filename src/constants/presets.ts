@@ -1,4 +1,4 @@
-import { SampleProject, VideoFilterSettings, FilterType } from '../types/editor';
+import { SampleProject, VideoFilterSettings, FilterType, LayoutSettings } from '../types/editor';
 
 export const FILTER_PRESETS: Record<FilterType, VideoFilterSettings> = {
   none: {
@@ -285,10 +285,49 @@ export const REFERENCE_IMAGE_PRESETS = [
     filter: 'vintage',
     desc: 'Tone warna hangat kekuningan, grain lembut, dan kontras klasik.',
   },
+];
+
+export const DEFAULT_LAYOUT_SETTINGS: LayoutSettings = {
+
+  type: 'solo',
+  swapSlots: false,
+  splitRatio: 0.5,
+  pipScale: 0.35,
+  pipPosition: 'bottom-right',
+  showDivider: true,
+  dividerColor: '#06b6d4', // cyan-500
+};
+
+export const LAYOUT_TEMPLATES = [
   {
-    name: 'Minimal Clean Apple Style',
-    url: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=400&q=80',
-    filter: 'clean',
-    desc: 'Tone netral jernih, clarity tinggi, dan pencahayaan studio merata.',
+    type: 'solo' as const,
+    name: 'Solo Fullscreen',
+    desc: 'Tampilan standar 1 layar penuh (fokus tunggal)',
+    icon: 'Maximize2',
+  },
+  {
+    type: 'split-vertical' as const,
+    name: 'Split Atas-Bawah',
+    desc: 'Format viral TikTok & Reels (misal Podcast di atas, reaksi/gameplay di bawah)',
+    icon: 'Columns2',
+  },
+  {
+    type: 'split-horizontal' as const,
+    name: 'Split Kiri-Kanan',
+    desc: 'Perbandingan side-by-side atau wawancara 2 narasumber',
+    icon: 'Rows2',
+  },
+  {
+    type: 'pip' as const,
+    name: 'Picture-in-Picture (PIP)',
+    desc: 'Video reaksi mengambang di sudut (bisa diatur posisi & diperbesar)',
+    icon: 'PictureInPicture2',
+  },
+  {
+    type: 'reaction-frame' as const,
+    name: 'Reaction Frame',
+    desc: 'Header reaksi dengan layout fokus bertingkat',
+    icon: 'Layers',
   },
 ];
+

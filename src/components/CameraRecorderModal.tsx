@@ -30,7 +30,9 @@ export const CameraRecorderModal: React.FC<CameraRecorderModalProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [micVolume, setMicVolume] = useState(0);
+  const [errorTitle, setErrorTitle] = useState<string>('Kamera Tidak Tersedia');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const fallbackFileInputRef = useRef<HTMLInputElement>(null);
 
   const videoPreviewRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -76,10 +78,35 @@ export const CameraRecorderModal: React.FC<CameraRecorderModalProps> = ({
   const startCamera = async () => {
     try {
       setErrorMsg(null);
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: true,
-      });
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setErrorTitle('Browser Tidak Mendukung Kamera');
+        setErrorMsg(
+          'Browser atau koneksi saat ini tidak mendukung akses kamera langsung. Anda tetap bisa mengunggah rekaman video dari perangkat.'
+        );
+        return;
+      }
+
+      let mediaStream: MediaStream | null = null;
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: true,
+        });
+      } catch (primaryErr: any) {
+        // Fallback: if microphone is missing or constraints are too strict, try basic video-only
+        if (
+          primaryErr?.name === 'NotFoundError' ||
+          primaryErr?.name === 'OverconstrainedError' ||
+          primaryErr?.name === 'DevicesNotFoundError'
+        ) {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        } else {
+          throw primaryErr;
+        }
+      }
 
       setStream(mediaStream);
       if (videoPreviewRef.current) {
@@ -87,37 +114,61 @@ export const CameraRecorderModal: React.FC<CameraRecorderModalProps> = ({
         videoPreviewRef.current.play().catch(() => {});
       }
 
-      // Audio VU meter
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        audioContextRef.current = audioCtx;
-        const source = audioCtx.createMediaStreamSource(mediaStream);
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 64;
-        source.connect(analyser);
-        analyserRef.current = analyser;
+      // Audio VU meter (only if stream has an audio track)
+      if (mediaStream.getAudioTracks().length > 0) {
+        try {
+          const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+          audioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(mediaStream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 64;
+          source.connect(analyser);
+          analyserRef.current = analyser;
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const checkAudio = () => {
-          if (!analyserRef.current) return;
-          analyserRef.current.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
-          }
-          const avg = sum / dataArray.length;
-          setMicVolume(Math.min(100, Math.round((avg / 128) * 100)));
-          animFrameRef.current = requestAnimationFrame(checkAudio);
-        };
-        checkAudio();
-      } catch (e) {
-        console.warn('Audio metering failed:', e);
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const checkAudio = () => {
+            if (!analyserRef.current) return;
+            analyserRef.current.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              sum += dataArray[i];
+            }
+            const avg = sum / dataArray.length;
+            setMicVolume(Math.min(100, Math.round((avg / 128) * 100)));
+            animFrameRef.current = requestAnimationFrame(checkAudio);
+          };
+          checkAudio();
+        } catch (e) {
+          console.warn('Audio metering failed:', e);
+        }
       }
     } catch (err: any) {
-      console.error('Camera access error:', err);
-      setErrorMsg(
-        'Tidak dapat mengakses kamera atau mikrofon. Pastikan Anda telah memberikan izin di peramban (browser).'
-      );
+      const errName = err?.name || '';
+      if (errName === 'NotFoundError' || errName === 'DevicesNotFoundError') {
+        console.warn('Camera device not detected on this machine:', err?.message);
+        setErrorTitle('Kamera Tidak Ditemukan');
+        setErrorMsg(
+          'Perangkat ini tidak memiliki kamera/webcam yang terdeteksi. Hubungkan webcam, atau unggah video rekaman langsung dari galeri/komputer Anda.'
+        );
+      } else if (errName === 'NotAllowedError' || errName === 'PermissionDeniedError') {
+        console.warn('Camera permission denied:', err?.message);
+        setErrorTitle('Izin Kamera Ditolak');
+        setErrorMsg(
+          'Akses kamera/mikrofon diblokir oleh browser. Klik ikon gembok di bilah alamat browser untuk mengizinkan kamera lalu klik Coba Lagi.'
+        );
+      } else if (errName === 'NotReadableError' || errName === 'TrackStartError') {
+        console.warn('Camera busy in another app:', err?.message);
+        setErrorTitle('Kamera Sedang Digunakan');
+        setErrorMsg(
+          'Kamera sedang dipakai oleh aplikasi lain (misal Zoom/Meet). Tutup aplikasi tersebut lalu coba lagi.'
+        );
+      } else {
+        console.warn('Camera access unavailable:', err?.message || err);
+        setErrorTitle('Kamera Tidak Dapat Diakses');
+        setErrorMsg(
+          'Tidak dapat mengakses kamera atau mikrofon saat ini. Pastikan perangkat terhubung atau unggah video dari perangkat Anda.'
+        );
+      }
     }
   };
 
@@ -231,14 +282,37 @@ export const CameraRecorderModal: React.FC<CameraRecorderModalProps> = ({
           {errorMsg ? (
             <div className="p-6 text-center space-y-3 max-w-md">
               <AlertCircle className="w-10 h-10 text-rose-500 mx-auto" />
-              <div className="text-sm font-semibold text-rose-300">Izin Kamera Diperlukan</div>
-              <p className="text-xs text-zinc-400">{errorMsg}</p>
-              <button
-                onClick={startCamera}
-                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs text-white rounded-lg"
-              >
-                Coba Lagi
-              </button>
+              <div className="text-sm font-semibold text-rose-300">{errorTitle}</div>
+              <p className="text-xs text-zinc-400 leading-relaxed">{errorMsg}</p>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-xs text-white rounded-lg cursor-pointer"
+                >
+                  Coba Lagi
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fallbackFileInputRef.current?.click()}
+                  className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-xs font-bold text-black rounded-lg cursor-pointer"
+                >
+                  Unggah Video Saja
+                </button>
+              </div>
+              <input
+                ref={fallbackFileInputRef}
+                type="file"
+                accept="video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onRecordingComplete(file);
+                    onClose();
+                  }
+                }}
+              />
             </div>
           ) : recordedVideoUrl ? (
             <video
